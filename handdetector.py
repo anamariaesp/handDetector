@@ -21,7 +21,6 @@ class HandDetector():
         )
 
         self.drawing_mp = mp.solutions.drawing_utils
-
         self.drawing_points_config = self.drawing_mp.DrawingSpec(color=self.point_color)
         self.drawing_connections_config = self.drawing_mp.DrawingSpec(color=self.connections_color)
 
@@ -31,36 +30,48 @@ class HandDetector():
         if self.results.multi_hand_landmarks:
             for points in self.results.multi_hand_landmarks:
                 if drawing:
-                    self.drawing_mp.draw_landmarks(
-                        image, points, self.hands_mp.HAND_CONNECTIONS, self.drawing_points_config, self.drawing_connections_config
-                    )
+                    self.drawing_mp.draw_landmarks(image, points, self.hands_mp.HAND_CONNECTIONS, self.drawing_points_config, self.drawing_connections_config)
         return image
 
-    def find_points(self, image, hand_num=0, drawing=True, color=(255,0,0), radius=7):
-        point_list = []
+    def find_points(self, image, drawing=True, color=(255, 0, 0), radius=7):
+        height, width, _ = image.shape
+        empty_hand = [(0, 0, 0)] * 21
 
-        if self.results.multi_hand_landmarks:
-            hand = self.results.multi_hand_landmarks[hand_num]
-            for id, point in enumerate(hand.landmark):
-                height, width, _ = image.shape
-                center_x, center_y = int(point.x * width), int(point.y * height)
-                point_list.append([id, center_x, center_y])
+        hands = {"Left": empty_hand, "Right": empty_hand}
 
-        return point_list
+        if self.results.multi_hand_landmarks and self.results.multi_handedness:
+            for hand_landmarks, handedness in zip(
+                    self.results.multi_hand_landmarks, self.results.multi_handedness
+            ):
+                label = handedness.classification[0].label
+
+                hand = []
+                for point in hand_landmarks.landmark:
+                    center_x = int(point.x * width)
+                    center_y = int(point.y * height)
+                    center_z = int(point.z * width)
+                    hand.append((center_x, center_y, center_z))
+
+                hands[label] = hand
+
+        return hands["Left"] + hands["Right"]
 
 def main():
     cap = cv2.VideoCapture(0)
 
     detector = HandDetector()
 
-    while True:
-        _, image = cap.read()
+    while cap.isOpened():
+        ret, image = cap.read()
         image = cv2.flip(image, 1)
         image = detector.find_hands(image)
         point_list = detector.find_points(image)
         print(point_list)
-        cv2.imshow('Captura', image)
+        cv2.imshow('Hand Tracking', image)
         cv2.waitKey(1)
+
+    cap.release()
+    cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     main()
